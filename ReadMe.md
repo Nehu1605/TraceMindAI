@@ -1,10 +1,6 @@
 # TraceMind AI
 ## Distributed OpenTelemetry Log-Trace Correlation & Autonomous RCA Engine
 
-> **Status:** Project README and implementation blueprint. Mark features as implemented only after code and tests verify them.
->
-> **Safety:** Start with synthetic data and simulated remediation. Do not connect automated actions to production without authorization, least-privilege access, audit logging, safeguards, and rollback procedures.
-
 ## 1. Problem Statement
 
 Cloud-native systems generate large volumes of distributed traces, application logs, and metrics. During an outage, SREs must manually connect alerts, trace IDs, logs, metrics, service dependencies, and recent deployments. This is slow and error-prone.
