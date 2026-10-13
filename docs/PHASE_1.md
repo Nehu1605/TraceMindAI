@@ -35,6 +35,16 @@ normal operation
 This is the exact scenario later phases must rediscover from telemetry
 alone; the injected cause is recorded only in the ground-truth file.
 
+## Decoys (I1)
+
+To stop a later phase from simply "blaming the latest deploy", the
+environment also records a **decoy deployment**: an unrelated, *later* deploy
+on `user-service` (commit `dec0y0abc`). It is written to `deployments.csv`
+and listed in the ground truth under `decoy_deployments`. The environment also
+defines a `healthy-baseline` scenario (no injected fault) in
+`incident_scenarios.json`, and `run_scenario.py` runs warm-up and recovery
+traffic so healthy behaviour is captured alongside the incident.
+
 ## Run locally (Docker)
 
 ```bash
@@ -92,4 +102,4 @@ pytest -q
 - After activating `db_conn_leak`, the gateway returns `HTTP 500`.
 - `POST /admin/reset` restores healthy behavior and releases connections.
 - `simulator/run_scenario.py` writes a ground-truth JSON with the injected
-  cause, deployment id, timestamps, and affected services.
+  cause, deployment id, timestamps, decoy deployments, and affected services.

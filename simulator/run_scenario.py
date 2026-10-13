@@ -29,6 +29,9 @@ from simulator.load_generator import TrafficStats, run_traffic
 BUGC_COMMIT_SHA = "c0ffee1d00m3"
 BUG_CHANGED_FILES = "services/payment_service/app.py"
 BUG_CHANGE_SUMMARY = "Introduce connection handling defect in payment-service"
+DECOY_COMMIT_SHA = "dec0y0abc"
+DECOY_CHANGED_FILES = "services/user_service/app.py"
+DECOY_CHANGE_SUMMARY = "Bump user-service request logging (unrelated to the incident)"
 
 DEFAULT_OUTPUT = "data/synthetic/scenario_ground_truth.json"
 DEFAULT_DEPLOYMENTS = "data/synthetic/deployments.csv"
@@ -100,6 +103,21 @@ def execute_scenario(
     fault = _set_fault(payment_admin_url, "db_conn_leak")
     print(f"    Fault active: {fault}")
 
+    # Decoy deployment (I1): land an unrelated deploy on a healthy service
+    # immediately *after* the fault, so a "blame the latest deploy" baseline
+    # (B4) is fooled and commit attribution is forced to use evidence.
+    decoy = {
+        "deployment_id": f"dep-{uuid.uuid4().hex[:10]}",
+        "service_name": "user-service",
+        "timestamp": _now_iso(),
+        "commit_sha": DECOY_COMMIT_SHA,
+        "status": "deployed",
+        "changed_files": DECOY_CHANGED_FILES,
+        "change_summary": DECOY_CHANGE_SUMMARY,
+    }
+    _append_deployment(deployments_path, decoy)
+    print(f"    Decoy deployment recorded: {decoy['deployment_id']}")
+
     print(f"[4/6] Incident traffic for {incident_seconds}s at {rps} rps")
     incident = run_traffic(gateway_url, incident_seconds, rps)
     incident_end = _now_iso()
@@ -119,6 +137,7 @@ def execute_scenario(
         "injected_cause": "db_conn_leak",
         "root_cause_service": "payment-service",
         "deployment": deployment,
+        "decoy_deployments": [decoy],
         "incident_start_time": incident_start,
         "incident_end_time": incident_end,
         "affected_services": ["payment-service", "order-service", "api-gateway"],

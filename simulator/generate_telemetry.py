@@ -27,6 +27,7 @@ from pathlib import Path
 
 BASE_TIME = datetime(2026, 10, 11, 10, 0, 0, tzinfo=timezone.utc)
 INC_DEPLOY_COMMIT = "c0ffee1d00m3"
+DECOY_DEPLOY_COMMIT = "dec0y0abc"
 POOL_SIZE = 5
 
 
@@ -251,6 +252,22 @@ class DatasetBuilder:
                 "ingestion_time": _iso(onset + timedelta(seconds=2)),
             }
         )
+        # Decoy deployment (I1): an unrelated, *later* deploy on a service that
+        # is not the cause. A "blame the latest deploy" baseline (B4) would pick
+        # this one, so commit attribution must look past recency.
+        decoy_on = onset + timedelta(seconds=15)
+        self.deployments.append(
+            {
+                "deployment_id": "dep-decoy0001",
+                "service_name": "user-service",
+                "timestamp": _iso(decoy_on),
+                "commit_sha": DECOY_DEPLOY_COMMIT,
+                "status": "deployed",
+                "changed_files": "services/user_service/app.py",
+                "change_summary": "Bump user-service request logging (unrelated to the incident)",
+                "ingestion_time": _iso(decoy_on + timedelta(seconds=2)),
+            }
+        )
 
     def _emit_alerts(self, incident_start: int, incident_end: int) -> None:
         onset = BASE_TIME + timedelta(milliseconds=500 * incident_start)
@@ -261,6 +278,7 @@ class DatasetBuilder:
             ("OrderHighLatency", "order-service", "warning", "order-service p95 latency above threshold", 2050),
             ("Order5xxRate", "order-service", "critical", "order-service 5xx rate above threshold", 0.5),
             ("Gateway5xxRate", "api-gateway", "critical", "api-gateway 5xx rate above threshold", 0.6),
+            ("OrderCpuHigh", "order-service", "warning", "order-service CPU above threshold", 0.85),
             ("PodRestarts", "payment-service", "warning", "payment-service pod restarted", 1),
         ]
         for offset, (name, service, severity, summary, value) in enumerate(specs):

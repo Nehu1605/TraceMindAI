@@ -4,10 +4,12 @@ Two kinds of linking, matching the improvement plan's I6 requirement:
 
 * **Direct** links use trace/span ids (a log with a valid trace context is
   attached to the exact span that produced it).
-* **Fallback** links are used when the trace id is missing: match by service,
-  time window and error signature, and mark the edge ``inferred`` (or
-  ``time_only`` when only service + time agree). The link is kept but its
-  lower confidence travels with it, so downstream scoring can discount it.
+* **Fallback** links are used when the trace id is missing: match by service
+  and time window, and require an *error signature* on both sides (an error
+  severity on the log and a 5xx/error status on the span) before calling the
+  link ``inferred``; when only service + time agree it is ``time_only``. The
+  link is kept but its lower confidence travels with it, so downstream scoring
+  can discount it.
 """
 
 from __future__ import annotations
@@ -197,7 +199,8 @@ class Correlators:
                 if match is not None:
                     return span_node(match.span_id), EvidenceQuality.DIRECT
 
-        # 2. Inferred: same service, within window, matching error signature.
+        # 2. Inferred: same service, within window, error signature on both
+        #    sides (error log + 5xx/error span).
         if log.service_name and _is_error(log):
             candidates = [
                 s

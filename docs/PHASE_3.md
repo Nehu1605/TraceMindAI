@@ -77,8 +77,8 @@ within `ALERT_GROUP_MAX_HOPS` in the `CALLS` graph **or** they share a trace id
 (the two criteria named in the plan). Each incident becomes a node with
 `GROUPED_INTO` edges from its alerts.
 
-On the demo incident this collapses 7 raw alerts from three services into
-**1 incident (7x reduction)**; a decoy alert on an unconnected service stays
+On the demo incident this collapses 8 raw alerts from three services into
+**1 incident (8x reduction)**; a decoy alert on an unconnected service stays
 in its own incident.
 
 **Grouping quality** (`grouping_quality(incidents, fault_by_service)`) reports

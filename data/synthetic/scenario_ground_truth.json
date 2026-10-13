@@ -12,6 +12,17 @@
     "changed_files": "services/payment_service/app.py",
     "change_summary": "Introduce connection handling defect in payment-service"
   },
+  "decoy_deployments": [
+    {
+      "deployment_id": "dep-decoy0001",
+      "service_name": "user-service",
+      "timestamp": "2026-10-11T10:02:15Z",
+      "commit_sha": "dec0y0abc",
+      "status": "deployed",
+      "changed_files": "services/user_service/app.py",
+      "change_summary": "Bump user-service request logging (unrelated to the incident)"
+    }
+  ],
   "incident_start_time": "2026-10-11T10:02:00Z",
   "incident_end_time": "2026-10-11T10:02:40Z",
   "affected_services": ["payment-service", "order-service", "api-gateway"],

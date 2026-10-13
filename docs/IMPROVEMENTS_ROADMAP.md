@@ -20,7 +20,7 @@ phase is scoped to close the right gaps instead of rediscovering them late.
 
 | ID | Improvement | Owning phase(s) | Status |
 |---|---|---|---|
-| I1 | Scenario library (20+ faults, decoys, healthy runs, train/test split) | P1 build, P7 split | Deferred |
+| I1 | Scenario library (20+ faults, decoys, healthy runs, train/test split) | P1 build, P7 split | Partial: P1 has a healthy baseline + a decoy deployment; 20+ faults and train/test split deferred to P7 |
 | I2 | Baseline comparison (B1 highest-5xx, B2 earliest-anomaly, B3 deepest failing span, B4 latest deploy) | P5 + P7 | Deferred |
 | I3 | Timed diagnosis (MTTR) study | P7 | Deferred |
 | I4 | Isolate graph vs LLM; every claim cites a validated evidence ID | P6 + P7 | Partly enabled: events already carry `event_id` + `source_reference` |
@@ -56,7 +56,9 @@ phase is scoped to close the right gaps instead of rediscovering them late.
 **I10 - alert overload, the ingestion half closed in P2:**
 
 1. Realistic Prometheus alert rules per service/metric (`telemetry/alerts.yml`)
-   plus Alertmanager grouping config (`telemetry/alertmanager.yml`).
+   plus Alertmanager grouping config (`telemetry/alertmanager.yml`). Rules
+   cover error rate, latency, pool usage, connection errors and CPU, and the
+   generated demo alerts exercise the same six signals.
 2. Raw alerts are ingested into the same unified event stream as every other
    source, so P3 can group them and P7 can measure the alert-reduction ratio.
 3. The gateway exposes `POST /alerts` to receive Alertmanager webhooks.
@@ -80,8 +82,8 @@ measuring bytes retained (P2/P3 build, P7 measure).
 - *Alert grouping*: alerts that share a time window and are connected in the
   service graph **or** share a trace id are collapsed into one incident
   (`correlation/alerting.py`); the alert-reduction ratio and a grouping-quality
-  measure (purity, impure incidents) are reported. Demo: 7 alerts -> 1 incident
-  (7x), decoy kept separate, purity 1.0.
+  measure (purity, impure incidents) are reported. Demo: 8 alerts -> 1 incident
+  (8x), decoy kept separate, purity 1.0.
 - *Log cost*: `correlation/log_reduction.py` mines templates (Drain-style key)
   and keeps full logs only in incident windows (errors always kept, rest
   sampled). Demo: 145 lines -> 6 templates (95.9% fewer distinct lines); bytes
