@@ -12,6 +12,9 @@ psycopg2-binary==2.9.9
 # Metrics
 prometheus-client==0.21.0
 
+# Graph (correlation / event-causality graph)
+networkx==3.3
+
 # Distributed tracing (OpenTelemetry)
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0

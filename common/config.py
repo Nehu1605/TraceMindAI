@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     # Window within which identical events are treated as duplicates.
     dedup_window_seconds: float = 300.0
 
+    # --- Correlation / graph (Phase 3) ----------------------------------
+    # Max gap (s) between a log and a candidate span for an inferred link.
+    correlation_window_seconds: float = 30.0
+    # Max gap (s) between alerts that may be grouped into one incident.
+    alert_group_window_seconds: float = 300.0
+    # Alerts may be grouped across services up to this many CALLS hops.
+    alert_group_max_hops: int = 2
+    # Sliding-window size/step (s) for streaming-style correlation (I7).
+    sliding_window_seconds: float = 300.0
+    sliding_window_step_seconds: float = 60.0
+
     def is_payment_fault_active(self) -> bool:
         return self.payment_fault_mode not in ("", "none")
 
