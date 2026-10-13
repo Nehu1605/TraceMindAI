@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
     prometheus_enabled: bool = True
 
+    # --- Ingestion / normalization (Phase 2) ----------------------------
+    # Tolerance used when ordering events whose clocks may differ slightly.
+    event_time_tolerance_ms: int = 200
+    # Events whose ingestion lag exceeds this are flagged (kept, not dropped).
+    late_event_threshold_seconds: float = 60.0
+    # event_time > ingestion_time by more than this suggests clock skew.
+    clock_skew_threshold_ms: int = 500
+    # Window within which identical events are treated as duplicates.
+    dedup_window_seconds: float = 300.0
+
     def is_payment_fault_active(self) -> bool:
         return self.payment_fault_mode not in ("", "none")
 

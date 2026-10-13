@@ -1,4 +1,4 @@
-# TraceMind AI - Phase 1 runtime and test dependencies
+# TraceMind AI - Phase 1 & 2 runtime and test dependencies
 # Demo microservices
 fastapi==0.115.0
 uvicorn[standard]==0.32.0

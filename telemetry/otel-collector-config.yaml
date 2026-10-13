@@ -21,10 +21,13 @@ exporters:
     endpoint: jaeger:4317
     tls:
       insecure: true
+  # Persist raw spans so the Phase 2 ingestion pipeline can normalize them.
+  file/traces:
+    path: /var/otel/out/traces.jsonl
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug, otlp/jaeger]
+      exporters: [debug, otlp/jaeger, file/traces]

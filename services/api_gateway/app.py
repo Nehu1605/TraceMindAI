@@ -35,6 +35,22 @@ async def healthz() -> HealthResponse:  # pragma: no cover - trivial
     return HealthResponse(status="ok", service=SERVICE_NAME, database_ok=True)
 
 
+@app.post("/alerts")
+async def receive_alerts(payload: dict) -> dict:
+    """Receive Alertmanager webhook batches (improvement I10).
+
+    Raw alerts land here in Docker Compose runs; the Phase 2 ingestion
+    pipeline consumes them and later phases measure alert reduction.
+    """
+
+    alerts = payload.get("alerts", []) if isinstance(payload, dict) else []
+    logger.warning(
+        "Received alert batch",
+        extra={"event_type": "ALERT_BATCH", "count": len(alerts)},
+    )
+    return {"status": "received", "count": len(alerts)}
+
+
 @app.post("/orders", response_model=OrderResponse)
 async def create_order(request: OrderRequest) -> OrderResponse:
     async with new_client() as client:
