@@ -9,6 +9,7 @@ quarantine them with a clear reason").
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from .schema import NormalizedEvent, SourceType
@@ -51,11 +52,14 @@ class EventValidator:
         known_services: set[str] | None = None,
         late_threshold_seconds: float = 60.0,
         clock_skew_threshold_ms: int = 500,
+        dedup_window_seconds: float = 300.0,
     ) -> None:
         self.known_services = known_services or set()
         self.late_threshold_seconds = late_threshold_seconds
         self.clock_skew_threshold_ms = clock_skew_threshold_ms
-        self._seen_ids: set[str] = set()
+        self.dedup_window_seconds = dedup_window_seconds
+        # event_id -> event_time of the first occurrence seen.
+        self._seen: dict[str, datetime] = {}
 
     def annotate(self, event: NormalizedEvent) -> None:
         """Set timing-quality flags (late arrival, suspected clock skew)."""
@@ -89,9 +93,19 @@ class EventValidator:
         return reasons
 
     def is_duplicate(self, event: NormalizedEvent) -> bool:
-        if event.event_id in self._seen_ids:
-            return True
-        self._seen_ids.add(event.event_id)
+        """True when the same ``event_id`` was already seen inside the window.
+
+        A repeat outside the window is treated as a new event, which keeps the
+        deduplicator from collapsing legitimate periodic samples (for example
+        a metric emitted every few minutes) that happen to share an id.
+        """
+
+        previous = self._seen.get(event.event_id)
+        if previous is not None:
+            delta = abs((event.event_time - previous).total_seconds())
+            if delta <= self.dedup_window_seconds:
+                return True
+        self._seen[event.event_id] = event.event_time
         return False
 
     def check(self, event: NormalizedEvent) -> list[str]:

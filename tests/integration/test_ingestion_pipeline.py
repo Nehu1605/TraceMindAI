@@ -57,15 +57,23 @@ def test_normalized_events_round_trip_through_jsonl(tmp_path):
     }
 
 
-def test_events_are_ordered_by_event_time(tmp_path):
+def test_events_are_ordered_within_clock_tolerance(tmp_path):
     raw = tmp_path / "raw"
     out = tmp_path / "out"
     generate_dataset(raw, seed=4, requests=20, degrade=DEGRADE_PRESETS["none"])
 
     result = run_ingestion(raw, out)
 
+    # Events are ordered by tolerance-bucketed event_time; any inversion must
+    # stay within the configured tolerance (near-simultaneous events are
+    # ordered by ingestion time instead).
+    from common.config import get_settings
+
+    tolerance_ms = get_settings().event_time_tolerance_ms
     times = [event.event_time for event in result.events]
-    assert times == sorted(times)
+    for earlier, later in zip(times, times[1:]):
+        gap_ms = (later - earlier).total_seconds() * 1000.0
+        assert gap_ms >= -tolerance_ms
 
 
 def test_incident_window_contains_error_events(tmp_path):

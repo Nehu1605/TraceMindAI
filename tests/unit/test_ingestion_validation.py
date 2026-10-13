@@ -39,6 +39,7 @@ def validator() -> EventValidator:
         known_services={"payment-service", "api-gateway"},
         late_threshold_seconds=60.0,
         clock_skew_threshold_ms=500,
+        dedup_window_seconds=300.0,
     )
 
 
@@ -67,6 +68,24 @@ def test_duplicate_event_is_only_flagged_once():
     v = validator()
     assert v.check(make_event()) == []
     assert REASON_DUPLICATE in v.check(make_event())
+
+
+def test_repeat_outside_dedup_window_is_not_a_duplicate():
+    v = EventValidator(known_services={"payment-service"}, dedup_window_seconds=10.0)
+    first = make_event(event_time=NOW)
+    later = make_event(event_time=NOW + timedelta(seconds=30))
+
+    assert v.check(first) == []
+    assert v.check(later) == []
+
+
+def test_repeat_inside_dedup_window_is_a_duplicate():
+    v = EventValidator(known_services={"payment-service"}, dedup_window_seconds=300.0)
+    first = make_event(event_time=NOW)
+    near = make_event(event_time=NOW + timedelta(seconds=5))
+
+    assert v.check(first) == []
+    assert REASON_DUPLICATE in v.check(near)
 
 
 def test_late_event_is_annotated_not_quarantined():

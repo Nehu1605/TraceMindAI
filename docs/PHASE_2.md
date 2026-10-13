@@ -22,8 +22,12 @@ the data trustworthy and uniformly shaped.
 | Pipeline + CLI | `ingestion/pipeline.py` |
 | Postgres event-store schema (reference) | `ingestion/sql/schema.sql` |
 | Synthetic telemetry generator (with defect injection) | `simulator/generate_telemetry.py` |
+| Degradation curve (data-loss robustness) | `simulator/degradation_test.py` |
 | Prometheus alert rules + Alertmanager (I10) | `telemetry/alerts.yml`, `telemetry/alertmanager.yml` |
 | Tests | `tests/unit`, `tests/integration`, `tests/scenarios` |
+
+Which improvements each phase owns is tracked in
+[`docs/IMPROVEMENTS_ROADMAP.md`](IMPROVEMENTS_ROADMAP.md).
 
 ## Unified event schema
 
@@ -59,16 +63,20 @@ Rather than assuming clean input, the pipeline is explicitly defensive:
 
 * **Missing trace ids** - kept, labelled `time_only` and counted in the
   quality report, so correlation can fall back to service + time window.
-* **Clock skew** - timestamps are compared with a tolerance
-  (`EVENT_TIME_TOLERANCE_MS`); an event whose `event_time` is ahead of its
-  `ingestion_time` beyond `CLOCK_SKEW_THRESHOLD_MS` is flagged, not rejected.
+* **Clock skew / ordering** - events are ordered by bucketing `event_time`
+  into fixed `EVENT_TIME_TOLERANCE_MS` windows and ordering within a window by
+  ingestion time, so sub-tolerance clock differences never produce spurious
+  "before/after" conclusions. An event whose `event_time` is ahead of its
+  `ingestion_time` beyond `CLOCK_SKEW_THRESHOLD_MS` is additionally flagged.
 * **Dropped spans** - spans whose parent is absent are flagged with
   `broken_trace_link` in `attributes`, which matters when reconstructing
   causal chains.
 * **Late arrival** - an ingestion lag above
   `LATE_EVENT_THRESHOLD_SECONDS` sets `is_late`; the event is kept.
-* **Duplicates** - identical deterministic `event_id`s are quarantined with
-  reason `duplicate_event`.
+* **Duplicates** - a repeated deterministic `event_id` is quarantined with
+  reason `duplicate_event` when it falls within `DEDUP_WINDOW_SECONDS` of the
+  first occurrence; a repeat outside the window is treated as a new event so
+  legitimate periodic samples are not collapsed.
 * **Invalid records** - unparseable timestamps, out-of-range durations/status
   codes, unknown service names and malformed JSON are never silently dropped.
   They are quarantined with an explicit reason and written to
@@ -100,6 +108,28 @@ Outputs written to `--out-dir`:
 * `quality_report.json` - counts, rates and defect signals,
 * `summary.json` - a compact run summary.
 
+## Degradation curve (I6)
+
+Re-run the incident at increasing data loss to show the pipeline is robust
+rather than merely correct on clean input:
+
+```bash
+python -m simulator.degradation_test --work-dir data/processed/degradation
+```
+
+It drops 0/10/20/30% of spans, removes trace ids from the same share of logs
+and adds 200 ms of clock skew, then writes `robustness_curve.json`. The shape
+of the curve is the result: ingestion stays near 100% while *direct*
+trace-link coverage falls slowly and `time_only` coverage absorbs the loss.
+
+```
+data_loss  valid_events  ingest_success  direct_link  time_only_link  broken_links
+       0%           543          100.0%        81.8%           18.2%             0
+      10%           516          100.0%        78.5%           21.5%            15
+      20%           479          100.0%        73.3%           26.7%            42
+      30%           459          100.0%        68.0%           32.0%            48
+```
+
 ## Quality report signals
 
 `quality_report.json` reports `missing_trace_id_rate`, `unknown_service`,
@@ -114,11 +144,13 @@ pytest -q
 ```
 
 * `tests/unit/test_ingestion_normalize.py` - timestamp/service/severity/ids.
-* `tests/unit/test_ingestion_validation.py` - validation, quarantine, skew, broken links.
+* `tests/unit/test_ingestion_validation.py` - validation, quarantine, skew, dedup window, broken links.
 * `tests/unit/test_ingestion_parsers.py` - every parser, including malformed input.
 * `tests/unit/test_ingestion_quality.py` - quality-report math.
+* `tests/unit/test_ingestion_temporal.py` - tolerance-aware ordering and window helpers.
 * `tests/integration/test_ingestion_pipeline.py` - end-to-end generate -> ingest.
 * `tests/scenarios/test_messy_telemetry.py` - clean vs messy degradation.
+* `tests/scenarios/test_degradation_curve.py` - robustness curve properties (I6).
 
 ## Acceptance criteria
 

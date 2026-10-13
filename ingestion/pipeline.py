@@ -61,6 +61,7 @@ def run_ingestion(
         known_services=set(CANONICAL_SERVICES),
         late_threshold_seconds=settings.late_event_threshold_seconds,
         clock_skew_threshold_ms=settings.clock_skew_threshold_ms,
+        dedup_window_seconds=settings.dedup_window_seconds,
     )
 
     parsed = parse_raw_directory(raw_dir, now)

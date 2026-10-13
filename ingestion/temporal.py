@@ -7,6 +7,7 @@ Phase 3 correlation logic.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
 
 from .schema import NormalizedEvent
@@ -23,23 +24,38 @@ def in_window(
     return (start - pad) <= when <= (end + pad)
 
 
+def time_bucket(event_time: datetime, tolerance_ms: int) -> int:
+    """Floor ``event_time`` into a fixed-width tolerance window."""
+
+    if tolerance_ms <= 0:
+        return 0
+    return math.floor(event_time.timestamp() * 1000.0 / tolerance_ms)
+
+
 def sort_events(
     events: list[NormalizedEvent], tolerance_ms: int = 0
 ) -> list[NormalizedEvent]:
-    """Return events ordered by ``event_time``.
+    """Return events in a clock-tolerant order.
 
-    Events within ``tolerance_ms`` of each other are treated as simultaneous
-    and ordered by ingestion time, so near-ties do not produce spurious
-    "before/after" conclusions.
+    ``event_time`` is bucketed into fixed ``tolerance_ms`` windows. Events in
+    the same window are treated as simultaneous and ordered by *ingestion*
+    time, because sub-tolerance differences between two clocks are not
+    trustworthy. Events in different windows are ordered by ``event_time``.
+    This is what keeps near-ties from producing spurious "before/after"
+    conclusions when clocks drift.
     """
 
     if tolerance_ms <= 0:
         return sorted(events, key=lambda e: (e.event_time, e.ingestion_time))
 
-    ordered = sorted(events, key=lambda e: (e.event_time, e.ingestion_time))
-    # A stable sort by ingestion time within tolerance buckets is sufficient
-    # for the MVP because Python's sort is stable.
-    return ordered
+    return sorted(
+        events,
+        key=lambda e: (
+            time_bucket(e.event_time, tolerance_ms),
+            e.ingestion_time,
+            e.event_time,
+        ),
+    )
 
 
 def precedes(
