@@ -25,11 +25,11 @@ phase is scoped to close the right gaps instead of rediscovering them late.
 | I3 | Timed diagnosis (MTTR) study | P7 | Deferred |
 | I4 | Isolate graph vs LLM; every claim cites a validated evidence ID | P6 + P7 | Partly enabled: events already carry `event_id` + `source_reference` |
 | I5 | Second independent test system (OpenTelemetry Demo, chaos tools) | P1 / P7 | Deferred |
-| **I6** | **Messy telemetry: tolerance windows, fallback links, evidence quality, degradation test** | **P2 build, P3 fallback links** | **Done** |
+| **I6** | **Messy telemetry: tolerance windows, fallback links, evidence quality, degradation test** | **P2 build, P3 fallback links** | **Done (build); accuracy-vs-loss curve P7** |
 | I7 | Streaming throughput: sliding windows, load generator, events/sec + detection delay | P3 windows, P7 measure | Partial (sliding windows done; throughput deferred) |
 | I8 | Smarter detection & ranking: per-service baselines, change-point, propagation-aware, confidence labels | P4 + P5 | Deferred |
 | I9 | Commit attribution beyond "latest deploy": window, code-path match, config changes, real git/CI | P5 | Deferred |
-| I10 | Alert overload + log cost | Alerts + **grouping P2/P3**; log-template reduction P3; measure P7 | Alerts + grouping done; log reduction deferred |
+| I10 | Alert overload + log cost | Alerts + **grouping + log reduction P2/P3**; accuracy trade-off P7 | Done (alerts, grouping, log reduction); accuracy-vs-reduction deferred |
 | I11 | Remediation validation: structured playbooks, guardrails, sandbox execution, recovery check | P6 | Deferred |
 | I12 | Explainability: top-3 candidates, evidence for/against, confidence, abstention, feedback | P6 + P7 | Deferred |
 | I13 | Redaction + prompt-injection defense; read-only git; local model option | P6 (pre-processing) | Deferred |
@@ -75,14 +75,19 @@ measuring bytes retained (P2/P3 build, P7 measure).
 - The evidence-quality label is attached to every graph edge with a numeric
   weight (`correlation/constants.py`), so scoring can discount weak links.
 
-**I10 - alert grouping closed in P3:**
+**I10 - both halves closed in P3:**
 
-- Alerts that share a time window and are connected in the service graph are
-  collapsed into one incident (`correlation/alerting.py`); the alert-reduction
-  ratio is reported. On the demo incident: 7 alerts -> 1 incident (7x), with a
-  decoy on an unconnected service kept separate.
-- Still deferred: log-template mining / bytes-retained measurement (P3 later or
-  P7).
+- *Alert grouping*: alerts that share a time window and are connected in the
+  service graph **or** share a trace id are collapsed into one incident
+  (`correlation/alerting.py`); the alert-reduction ratio and a grouping-quality
+  measure (purity, impure incidents) are reported. Demo: 7 alerts -> 1 incident
+  (7x), decoy kept separate, purity 1.0.
+- *Log cost*: `correlation/log_reduction.py` mines templates (Drain-style key)
+  and keeps full logs only in incident windows (errors always kept, rest
+  sampled). Demo: 145 lines -> 6 templates (95.9% fewer distinct lines); bytes
+  retained are reported against bytes ingested.
+- Still deferred to P7: the accuracy-vs-reduction trade-off (does RCA accuracy
+  hold when reduced logs are used), which needs the RCA phase.
 
 **I7 - sliding windows started in P3:**
 

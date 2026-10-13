@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     # Sliding-window size/step (s) for streaming-style correlation (I7).
     sliding_window_seconds: float = 300.0
     sliding_window_step_seconds: float = 60.0
+    # Fraction of non-incident logs to keep (0.0 drops them; I10 log cost).
+    log_sample_rate: float = 0.0
+    # Padding (s) around an incident when retaining its full logs.
+    log_incident_pad_seconds: float = 60.0
 
     def is_payment_fault_active(self) -> bool:
         return self.payment_fault_mode not in ("", "none")

@@ -15,7 +15,7 @@ from datetime import timedelta
 
 import networkx as nx
 
-from ingestion.schema import NormalizedEvent, Severity, SourceType
+from ingestion.schema import EvidenceQuality, NormalizedEvent, Severity, SourceType
 
 from .constants import EdgeType, NodeType, incident_node, service_node
 from .graph import EventGraph
@@ -114,8 +114,15 @@ def group_alerts(
         for j in range(i + 1, len(alerts)):
             if abs((alerts[i].event_time - alerts[j].event_time)) > window:
                 continue
+            # I10: group when connected in the service graph *or* sharing a
+            # trace id, so two signals for the same request always merge even
+            # when their services are not topologically adjacent.
+            same_trace = (
+                alerts[i].trace_id is not None
+                and alerts[i].trace_id == alerts[j].trace_id
+            )
             hops = _hops(adj, services[i], services[j])
-            if hops is not None and hops <= max_hops:
+            if same_trace or (hops is not None and hops <= max_hops):
                 uf.union(i, j)
 
     clusters: dict[int, list[NormalizedEvent]] = {}
@@ -136,18 +143,63 @@ def _build_incident(cluster: list[NormalizedEvent]) -> dict:
     evidence_ids = sorted(a.event_id for a in cluster)
     incident_id = "inc-" + hashlib.sha1("|".join(evidence_ids).encode()).hexdigest()[:12]
     services = sorted({a.service_name for a in cluster if a.service_name})
+    service_counts: dict[str, int] = {}
+    for a in cluster:
+        if a.service_name:
+            service_counts[a.service_name] = service_counts.get(a.service_name, 0) + 1
     worst = max(cluster, key=lambda a: _SEVERITY_RANK.get(a.severity, -1))
     return {
         "incident_id": incident_id,
         "start_time": cluster[0].event_time.isoformat(),
         "end_time": cluster[-1].event_time.isoformat(),
         "services": services,
+        "service_counts": service_counts,
         "alert_count": len(cluster),
         "severity": worst.severity.value,
         "alertnames": sorted(
             {str(a.attributes.get("alertname")) for a in cluster if a.attributes.get("alertname")}
         ),
         "evidence_ids": evidence_ids,
+    }
+
+
+def grouping_quality(
+    incidents: list[dict],
+    fault_by_service: dict[str, str],
+) -> dict:
+    """Measure grouping quality against known fault labels (I10).
+
+    ``fault_by_service`` maps a service name to the injected-fault identifier
+    that produced it (the caller's ground truth). Two numbers come out:
+
+    * ``purity`` - the share of alerts whose incident's majority fault is the
+      alert's own fault. 1.0 means no alert was grouped with a different fault.
+    * ``impure_incidents`` - incidents that span more than one fault, i.e.
+      separate faults that were wrongly merged.
+    """
+
+    total_alerts = 0
+    majority_alerts = 0
+    impure = 0
+    for incident in incidents:
+        counts = incident.get("service_counts") or {}
+        by_fault: dict[str, int] = {}
+        for service, count in counts.items():
+            fault = fault_by_service.get(service, "unlabelled")
+            by_fault[fault] = by_fault.get(fault, 0) + count
+        incident_alerts = sum(counts.values())
+        total_alerts += incident_alerts
+        if by_fault:
+            majority = max(by_fault.values())
+            majority_alerts += majority
+        if len(by_fault) > 1:
+            impure += 1
+    purity = round(majority_alerts / total_alerts, 2) if total_alerts else 1.0
+    return {
+        "purity": purity,
+        "impure_incidents": impure,
+        "incident_count": len(incidents),
+        "labelled_services": len(fault_by_service),
     }
 
 
@@ -170,16 +222,10 @@ def _attach_incident(graph: EventGraph, incident: dict) -> None:
                 node,
                 EdgeType.GROUPED_INTO,
                 # grouping is time+topology based, never a direct trace link
-                _time_only(),
+                EvidenceQuality.TIME_ONLY,
             )
     # Also connect the incident to each affected service for topology queries.
     for service in incident["services"]:
         svc = service_node(service)
         if graph.has_node(svc):
-            graph.add_edge(node, svc, EdgeType.OBSERVED_DURING, _time_only())
-
-
-def _time_only():
-    from ingestion.schema import EvidenceQuality
-
-    return EvidenceQuality.TIME_ONLY
+            graph.add_edge(node, svc, EdgeType.OBSERVED_DURING, EvidenceQuality.TIME_ONLY)

@@ -193,13 +193,14 @@ class DatasetBuilder:
         self._add_span(trace_id, p, o, "payment-service", "POST /pay", t0 + timedelta(milliseconds=8), 6 if not failing else 2000, 200 if not failing else 503)
         self._add_span(trace_id, d, p, "postgres", "INSERT payment", t0 + timedelta(milliseconds=10), 2 if not failing else 1900, 200 if not failing else 504)
 
+        order = trace_id.replace("trace-", "ORD-")
         if failing:
-            self._add_log(t0 + timedelta(milliseconds=2000), "payment-service", "ERROR", "Database connection acquisition timeout", "DB_CONNECTION_TIMEOUT", trace_id, p)
-            self._add_log(t0 + timedelta(milliseconds=2050), "order-service", "ERROR", "payment-service returned 503", "HTTP_5XX", trace_id, o)
-            self._add_log(t0 + timedelta(milliseconds=2100), "api-gateway", "ERROR", "order-service returned 502", "HTTP_5XX", trace_id, g)
+            self._add_log(t0 + timedelta(milliseconds=2000), "payment-service", "ERROR", f"Database connection acquisition timeout after 2000ms pool=10/10 order={order}", "DB_CONNECTION_TIMEOUT", trace_id, p)
+            self._add_log(t0 + timedelta(milliseconds=2050), "order-service", "ERROR", f"payment-service returned 503 order={order} attempt=1", "HTTP_5XX", trace_id, o)
+            self._add_log(t0 + timedelta(milliseconds=2100), "api-gateway", "ERROR", f"order-service returned 502 order={order} path=/checkout", "HTTP_5XX", trace_id, g)
         else:
-            self._add_log(t0 + timedelta(milliseconds=8), "payment-service", "INFO", "Payment approved", "LOG", trace_id, p)
-            self._add_log(t0 + timedelta(milliseconds=15), "api-gateway", "INFO", "Request served", "LOG", trace_id, g)
+            self._add_log(t0 + timedelta(milliseconds=8), "payment-service", "INFO", f"Payment approved order={order} amount=49.99 status=200", "LOG", trace_id, p)
+            self._add_log(t0 + timedelta(milliseconds=15), "api-gateway", "INFO", f"Request served order={order} method=POST path=/checkout status=200 latency=18ms", "LOG", trace_id, g)
 
     def _emit_metrics(self, warmup: int, incident_start: int, incident_end: int) -> None:
         for i in range(0, self.requests, 4):

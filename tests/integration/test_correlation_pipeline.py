@@ -57,3 +57,16 @@ def test_messy_dataset_produces_inferred_fallback_links(tmp_path):
     # Missing trace ids in the messy data must still be linked, just with
     # lower confidence (I6 fallback matching).
     assert counts.get("inferred", 0) + counts.get("time_only", 0) > 0
+
+
+def test_clean_dataset_reduces_log_volume(tmp_path):
+    events = _events(tmp_path)
+    result = correlate_events(events)
+
+    reduction = result.log_reduction
+    assert reduction.log_count_total > 0
+    assert reduction.template_count > 0
+    # Non-incident info logs are dropped, so some bytes are saved.
+    assert reduction.bytes_retained <= reduction.bytes_ingested
+    assert 0.0 <= reduction.bytes_reduction_pct <= 100.0
+    assert "log_reduction" in result.summary()

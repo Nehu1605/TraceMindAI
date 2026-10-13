@@ -5,13 +5,15 @@ evidence graph**. Nodes are telemetry entities; edges are evidence links that
 each carry a confidence label, so later phases can reason about *how strongly*
 two things are connected rather than treating every link as equal.
 
-It also delivers the correlation halves of two improvement-plan items:
+It also delivers the correlation halves of the improvement-plan items:
 
 * **I6** - when a log has no trace id, it is linked by service + time window +
   error signature and marked `inferred` / `time_only` instead of being
-  discarded.
-* **I10** - raw alerts are grouped into incidents, with an alert-reduction
-  ratio.
+  discarded; every edge carries an evidence-quality value for scoring.
+* **I10** (both halves) - raw alerts are grouped into incidents with an
+  alert-reduction ratio and a grouping-quality measure, and log volume is
+  reduced by template mining (Drain-style key) plus incident-windowed
+  retention, reporting bytes retained against bytes ingested.
 * **I7** (partial) - a sliding-window iterator so correlation runs over the
   last N seconds instead of waiting for a fixed batch.
 
@@ -22,7 +24,8 @@ It also delivers the correlation halves of two improvement-plan items:
 | Graph vocabulary (node/edge types, evidence weights) | `correlation/constants.py` |
 | Event graph (serializable NetworkX wrapper) | `correlation/graph.py` |
 | Correlators (span/log/metric/deployment/alert) | `correlation/correlators.py` |
-| Alert grouping into incidents (I10) | `correlation/alerting.py` |
+| Alert grouping + grouping quality (I10) | `correlation/alerting.py` |
+| Log-template mining + log reduction (I10) | `correlation/log_reduction.py` |
 | Sliding windows (I7) | `correlation/windowing.py` |
 | Orchestration | `correlation/builder.py` |
 | Pipeline CLI | `correlation/pipeline.py` |
@@ -69,13 +72,41 @@ discount `time_only` links.
 ## Alert grouping (I10)
 
 Alerts are grouped into one incident when they share a time window
-(`ALERT_GROUP_WINDOW_SECONDS`) *and* their services are connected within
-`ALERT_GROUP_MAX_HOPS` in the `CALLS` graph. Each incident becomes a node with
+(`ALERT_GROUP_WINDOW_SECONDS`) *and* either their services are connected
+within `ALERT_GROUP_MAX_HOPS` in the `CALLS` graph **or** they share a trace id
+(the two criteria named in the plan). Each incident becomes a node with
 `GROUPED_INTO` edges from its alerts.
 
 On the demo incident this collapses 7 raw alerts from three services into
 **1 incident (7x reduction)**; a decoy alert on an unconnected service stays
 in its own incident.
+
+**Grouping quality** (`grouping_quality(incidents, fault_by_service)`) reports
+`purity` (share of alerts whose incident is dominated by their own fault) and
+`impure_incidents` (incidents that merged more than one fault). On the demo the
+injected fault and the decoy are separate faults with **purity 1.0 and
+0 impure incidents**. The full accuracy-vs-reduction trade-off is measured in
+P7 (it needs the RCA phase).
+
+## Log-volume reduction (I10, log cost)
+
+`correlation/log_reduction.py` does two things the plan asks for:
+
+1. **Template mining** (`template_of`, `mine_templates`) - a Drain-style key
+   replaces timestamps, ids, addresses and numbers with placeholders, so
+   `... order=ORD-0007 ...` and `... order=ORD-0042 ...` collapse to one
+   template with a count and byte total.
+2. **Incident-windowed retention** (`reduce_logs`) - full logs are kept for the
+   incident time windows (padded), error/fatal logs are always kept, and the
+   rest is sampled (`LOG_SAMPLE_RATE`, default 0.0 = dropped). Non-log events
+   are never dropped.
+
+On the demo incident: **145 log lines collapse to 6 templates (95.9% fewer
+distinct lines)**. Byte retention is small on this dataset (~0.3%) because it
+is a single all-error incident whose window spans the whole run - the win comes
+from template collapse and from dropping background logs in busier datasets.
+The reduced stream is written to `reduced_logs.jsonl` and the measurement to
+`log_reduction.json`.
 
 ## Run the pipeline
 
@@ -94,7 +125,10 @@ Outputs written to `--out-dir`:
 
 * `graph.json` - nodes, edges, node/edge type counts, service dependencies.
 * `incidents.json` - incident groups + alert-reduction ratio.
-* `correlation_summary.json` - correlation counts and graph stats.
+* `log_reduction.json` - templates, distinct-line and byte reduction figures.
+* `reduced_logs.jsonl` - the retained log stream after reduction.
+* `correlation_summary.json` - correlation counts, graph stats, alert grouping
+  and log-reduction summary.
 
 ## Tests
 
@@ -104,7 +138,8 @@ pytest -q
 
 * `tests/unit/test_correlation_graph.py` - graph add/query/serialize.
 * `tests/unit/test_correlation_correlators.py` - span/log/metric/deployment/alert links and fallback quality.
-* `tests/unit/test_correlation_alerting.py` - grouping by window, hops, topology.
+* `tests/unit/test_correlation_alerting.py` - grouping by window, hops, topology, shared trace id; grouping quality.
+* `tests/unit/test_correlation_log_reduction.py` - template keys, mining counts, retention policy, determinism, byte/line reduction.
 * `tests/unit/test_correlation_windowing.py` - sliding-window coverage/overlap.
 * `tests/integration/test_correlation_pipeline.py` - generate -> ingest -> correlate.
 * `tests/scenarios/test_alert_grouping_scenario.py` - incident collapse vs decoy.
@@ -116,14 +151,21 @@ pytest -q
 - Logs without trace ids are still linked, with `inferred`/`time_only`
   confidence (I6), not dropped.
 - Alerts from one injected fault collapse into a single incident, and an
-  unrelated decoy does not get merged (I10), with the reduction ratio reported.
+  unrelated decoy does not get merged (I10), with the reduction ratio and
+  grouping quality (purity, impure incidents) reported.
+- Repeated log lines collapse into templates and non-incident logs are dropped,
+  with bytes/line reduction reported (I10 log cost).
 - `python -m correlation.pipeline` runs end-to-end and writes `graph.json`,
-  `incidents.json` and `correlation_summary.json`.
+  `incidents.json`, `log_reduction.json`, `reduced_logs.jsonl` and
+  `correlation_summary.json`.
 
 ## Deferred to later phases
 
-- Anomaly detection against per-service baselines (I8 -> P4).
-- RCA ranking, baselines B1-B4, commit attribution (I2/I9 -> P5).
+- Anomaly detection against per-service baselines, using the sliding windows
+  (I8 -> P4).
+- RCA ranking, baselines B1-B4, commit attribution; this is where the edge
+  evidence weights are consumed by scoring (I2/I9 -> P5).
+- The accuracy-vs-reduction trade-off (does RCA accuracy hold when reduced logs
+  are used) and the I6 accuracy-at-loss curve need the RCA phase (-> P7).
 - Evidence-cited LLM report and remediation (I4/I11/I12/I13 -> P6).
-- Grouping-quality metrics against ground truth and throughput figures
-  (P7).
+- Throughput figures (events/sec, detection delay) (-> P7).

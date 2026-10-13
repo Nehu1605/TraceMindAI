@@ -8,6 +8,7 @@ from ingestion.pipeline import run_ingestion
 from ingestion.schema import NormalizedEvent, Severity, SourceType
 from simulator.generate_telemetry import DEGRADE_PRESETS, generate_dataset
 
+from correlation.alerting import grouping_quality
 from correlation.builder import correlate_events
 
 
@@ -58,3 +59,17 @@ def test_incident_alerts_collapse_and_a_decoy_stays_separate(tmp_path):
     assert len(decoy_groups) == 1
     assert result.alert_grouping.raw_alert_count == len(alerts) + 1
     assert result.alert_grouping.reduction_ratio == round((len(alerts) + 1) / 2, 2)
+
+    # I10 grouping quality: the injected fault and the decoy are separate
+    # faults, and no incident mixes them.
+    quality = grouping_quality(
+        result.alert_grouping.incidents,
+        {
+            "api-gateway": "injected",
+            "order-service": "injected",
+            "payment-service": "injected",
+            "recommendation-service": "decoy",
+        },
+    )
+    assert quality["purity"] == 1.0
+    assert quality["impure_incidents"] == 0

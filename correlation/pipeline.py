@@ -55,6 +55,13 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "incidents.json").write_text(
         json.dumps(result.alert_grouping.to_dict(), indent=2), encoding="utf-8"
     )
+    log_reduction = result.log_reduction
+    (out_dir / "log_reduction.json").write_text(
+        json.dumps(log_reduction.to_dict(), indent=2), encoding="utf-8"
+    )
+    with (out_dir / "reduced_logs.jsonl").open("w", encoding="utf-8") as handle:
+        for event in log_reduction.kept_events:
+            handle.write(event.to_json() + "\n")
     summary = result.summary()
     (out_dir / "correlation_summary.json").write_text(
         json.dumps(summary, indent=2, default=str), encoding="utf-8"
@@ -69,6 +76,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  raw alerts        : {result.alert_grouping.raw_alert_count}")
     print(f"  incident groups   : {result.alert_grouping.incident_count}")
     print(f"  alert reduction   : {result.alert_grouping.reduction_ratio}x")
+    print(f"  log templates     : {log_reduction.template_count} templates from "
+          f"{log_reduction.unique_lines} unique / {log_reduction.log_count_total} lines "
+          f"({log_reduction.template_reduction_pct}% fewer distinct)")
+    print(f"  logs kept         : {log_reduction.log_count_retained}/"
+          f"{log_reduction.log_count_total} "
+          f"({log_reduction.log_reduction_pct}% fewer)")
+    print(f"  log bytes         : {log_reduction.bytes_reduction_pct}% fewer")
     print(f"  output            : {out_dir}")
     return 0
 
