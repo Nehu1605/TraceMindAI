@@ -27,6 +27,7 @@ from pathlib import Path
 
 BASE_TIME = datetime(2026, 10, 11, 10, 0, 0, tzinfo=timezone.utc)
 INC_DEPLOY_COMMIT = "c0ffee1d00m3"
+DECOY_DEPLOY_COMMIT = "dec0y0abc"
 POOL_SIZE = 5
 
 
@@ -193,13 +194,14 @@ class DatasetBuilder:
         self._add_span(trace_id, p, o, "payment-service", "POST /pay", t0 + timedelta(milliseconds=8), 6 if not failing else 2000, 200 if not failing else 503)
         self._add_span(trace_id, d, p, "postgres", "INSERT payment", t0 + timedelta(milliseconds=10), 2 if not failing else 1900, 200 if not failing else 504)
 
+        order = trace_id.replace("trace-", "ORD-")
         if failing:
-            self._add_log(t0 + timedelta(milliseconds=2000), "payment-service", "ERROR", "Database connection acquisition timeout", "DB_CONNECTION_TIMEOUT", trace_id, p)
-            self._add_log(t0 + timedelta(milliseconds=2050), "order-service", "ERROR", "payment-service returned 503", "HTTP_5XX", trace_id, o)
-            self._add_log(t0 + timedelta(milliseconds=2100), "api-gateway", "ERROR", "order-service returned 502", "HTTP_5XX", trace_id, g)
+            self._add_log(t0 + timedelta(milliseconds=2000), "payment-service", "ERROR", f"Database connection acquisition timeout after 2000ms pool=10/10 order={order}", "DB_CONNECTION_TIMEOUT", trace_id, p)
+            self._add_log(t0 + timedelta(milliseconds=2050), "order-service", "ERROR", f"payment-service returned 503 order={order} attempt=1", "HTTP_5XX", trace_id, o)
+            self._add_log(t0 + timedelta(milliseconds=2100), "api-gateway", "ERROR", f"order-service returned 502 order={order} path=/checkout", "HTTP_5XX", trace_id, g)
         else:
-            self._add_log(t0 + timedelta(milliseconds=8), "payment-service", "INFO", "Payment approved", "LOG", trace_id, p)
-            self._add_log(t0 + timedelta(milliseconds=15), "api-gateway", "INFO", "Request served", "LOG", trace_id, g)
+            self._add_log(t0 + timedelta(milliseconds=8), "payment-service", "INFO", f"Payment approved order={order} amount=49.99 status=200", "LOG", trace_id, p)
+            self._add_log(t0 + timedelta(milliseconds=15), "api-gateway", "INFO", f"Request served order={order} method=POST path=/checkout status=200 latency=18ms", "LOG", trace_id, g)
 
     def _emit_metrics(self, warmup: int, incident_start: int, incident_end: int) -> None:
         for i in range(0, self.requests, 4):
@@ -250,6 +252,22 @@ class DatasetBuilder:
                 "ingestion_time": _iso(onset + timedelta(seconds=2)),
             }
         )
+        # Decoy deployment (I1): an unrelated, *later* deploy on a service that
+        # is not the cause. A "blame the latest deploy" baseline (B4) would pick
+        # this one, so commit attribution must look past recency.
+        decoy_on = onset + timedelta(seconds=15)
+        self.deployments.append(
+            {
+                "deployment_id": "dep-decoy0001",
+                "service_name": "user-service",
+                "timestamp": _iso(decoy_on),
+                "commit_sha": DECOY_DEPLOY_COMMIT,
+                "status": "deployed",
+                "changed_files": "services/user_service/app.py",
+                "change_summary": "Bump user-service request logging (unrelated to the incident)",
+                "ingestion_time": _iso(decoy_on + timedelta(seconds=2)),
+            }
+        )
 
     def _emit_alerts(self, incident_start: int, incident_end: int) -> None:
         onset = BASE_TIME + timedelta(milliseconds=500 * incident_start)
@@ -260,6 +278,7 @@ class DatasetBuilder:
             ("OrderHighLatency", "order-service", "warning", "order-service p95 latency above threshold", 2050),
             ("Order5xxRate", "order-service", "critical", "order-service 5xx rate above threshold", 0.5),
             ("Gateway5xxRate", "api-gateway", "critical", "api-gateway 5xx rate above threshold", 0.6),
+            ("OrderCpuHigh", "order-service", "warning", "order-service CPU above threshold", 0.85),
             ("PodRestarts", "payment-service", "warning", "payment-service pod restarted", 1),
         ]
         for offset, (name, service, severity, summary, value) in enumerate(specs):

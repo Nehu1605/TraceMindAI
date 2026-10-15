@@ -14,6 +14,13 @@
       "fault_mode": "db_conn_leak",
       "root_cause_service": "payment-service",
       "affected_services": ["payment-service", "order-service", "api-gateway"],
+      "decoy_deployments": [
+        {
+          "service_name": "user-service",
+          "commit_sha": "dec0y0abc",
+          "note": "Unrelated deploy landing just after the fault, to test commit attribution (I9)."
+        }
+      ],
       "expect_incident": true
     }
   ]

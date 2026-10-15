@@ -4,3 +4,4 @@ dep-baseline0002,order-service,2026-10-11T09:05:00Z,d4e5f6a,deployed,services/or
 dep-baseline0003,user-service,2026-10-11T09:06:00Z,b7c8d9e,deployed,services/user_service/app.py,Initial user service
 dep-baseline0004,api-gateway,2026-10-11T09:07:00Z,f0a1b2c,deployed,services/api_gateway/app.py,Initial gateway release
 dep-34392dc70b,payment-service,2026-10-12T17:34:30.797960Z,c0ffee1d00m3,deployed,services/payment_service/app.py,Introduce connection handling defect in payment-service
+dep-decoy0001,user-service,2026-10-12T17:34:45.797960Z,dec0y0abc,deployed,services/user_service/app.py,"Bump user-service request logging (unrelated to the incident)"

@@ -60,3 +60,16 @@ groups:
         annotations:
           summary: "{{ $labels.service }} reporting application errors"
           description: "{{ $labels.service }} logged application errors ({{ $labels.error_type }})."
+
+      # CPU is not an application counter, so it comes from cAdvisor in the
+      # compose stack rather than the service metrics (I10 lists CPU alongside
+      # error rate, latency and pool usage).
+      - alert: ContainerCpuHigh
+        expr: |
+          sum by (service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~".+"}[1m])) > 0.8
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} CPU usage high"
+          description: "{{ $labels.service }} container CPU is above the threshold."
