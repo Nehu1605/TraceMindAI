@@ -1,0 +1,30 @@
+# OpenTelemetry Collector configuration for TraceMind AI (Phase 1).
+# Receives OTLP from the demo services and forwards traces to Jaeger.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 400
+
+exporters:
+  debug:
+    verbosity: normal
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug, otlp/jaeger]

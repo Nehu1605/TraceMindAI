@@ -1,0 +1,6 @@
+deployment_id,service_name,timestamp,commit_sha,status,changed_files,change_summary
+dep-baseline0001,payment-service,2026-10-11T09:00:00Z,a1b2c3d,deployed,services/payment_service/app.py,Baseline payment service revision
+dep-baseline0002,order-service,2026-10-11T09:05:00Z,d4e5f6a,deployed,services/order_service/app.py,Initial order orchestration
+dep-baseline0003,user-service,2026-10-11T09:06:00Z,b7c8d9e,deployed,services/user_service/app.py,Initial user service
+dep-baseline0004,api-gateway,2026-10-11T09:07:00Z,f0a1b2c,deployed,services/api_gateway/app.py,Initial gateway release
+dep-34392dc70b,payment-service,2026-10-12T17:34:30.797960Z,c0ffee1d00m3,deployed,services/payment_service/app.py,Introduce connection handling defect in payment-service

@@ -1,0 +1,20 @@
+{
+  "scenarios": [
+    {
+      "id": "healthy-baseline",
+      "description": "Normal operation with no injected fault.",
+      "fault_mode": "none",
+      "root_cause_service": null,
+      "affected_services": [],
+      "expect_incident": false
+    },
+    {
+      "id": "payment-db-conn-exhaustion-001",
+      "description": "Buggy payment-service leaks DB connections, exhausting the pool.",
+      "fault_mode": "db_conn_leak",
+      "root_cause_service": "payment-service",
+      "affected_services": ["payment-service", "order-service", "api-gateway"],
+      "expect_incident": true
+    }
+  ]
+}
