@@ -1,0 +1,62 @@
+# Prometheus alerting rules for the TraceMind demo services (improvement I10).
+#
+# These rules emulate the "wall of alerts" an SRE faces during an outage.
+# The ingestion pipeline can consume the resulting alerts and later phases
+# measure how many raw alerts collapse into a single incident.
+groups:
+  - name: tracemind-service-health
+    rules:
+      - alert: Http5xxRateHigh
+        expr: |
+          sum by (service) (rate(tracemind_http_requests_total{status=~"5.."}[1m]))
+            /
+          clamp_min(sum by (service) (rate(tracemind_http_requests_total[1m])), 0.001)
+            > 0.05
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} HTTP 5xx rate above 5%"
+          description: "5xx ratio for {{ $labels.service }} has exceeded 5%."
+
+      - alert: RequestLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(tracemind_http_request_duration_seconds_bucket[1m]))
+          ) > 1.0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} p95 latency above 1s"
+          description: "p95 request latency for {{ $labels.service }} is above 1 second."
+
+      - alert: DbPoolSaturation
+        expr: |
+          tracemind_db_connections_in_use
+            / clamp_min(tracemind_db_pool_size, 1) >= 0.8
+        for: 5s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} database pool near saturation"
+          description: "Connection pool for {{ $labels.service }} is at or above 80% utilisation."
+
+      - alert: DbConnectionErrors
+        expr: increase(tracemind_db_connection_errors_total[1m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} cannot acquire database connections"
+          description: "{{ $labels.service }} reported connection acquisition failures."
+
+      - alert: ApplicationErrors
+        expr: increase(tracemind_app_errors_total[1m]) > 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} reporting application errors"
+          description: "{{ $labels.service }} logged application errors ({{ $labels.error_type }})."
