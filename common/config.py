@@ -82,6 +82,40 @@ class Settings(BaseSettings):
     # Padding (s) around an incident when retaining its full logs.
     log_incident_pad_seconds: float = 60.0
 
+    # --- Detection (Phase 4, I8) ----------------------------------------
+    # Number of leading points used to establish each service's baseline.
+    baseline_warmup_points: int = 3
+    # Robust z-score threshold (median + k*MAD) that opens an anomaly.
+    anomaly_z_threshold: float = 4.0
+    # EWMA smoothing factor for the secondary baseline.
+    ewma_alpha: float = 0.4
+    # Minimum points before a change-point can be trusted.
+    change_point_min_points: int = 4
+
+    # --- RCA (Phase 5, I8/I9/I12) ---------------------------------------
+    # Score margin between top-1 and top-2 below which we lower confidence.
+    rca_high_margin: float = 0.25
+    rca_medium_margin: float = 0.10
+    # Below this top score the engine abstains instead of guessing.
+    rca_abstain_threshold: float = 0.05
+    # How many candidates to return (top-3 explainability).
+    rca_top_k: int = 3
+    # Window (s) around the anomaly onset to consider deployments (I9).
+    commit_window_seconds: float = 900.0
+
+    # --- Reporting (Phase 6, I4/I11/I13) --------------------------------
+    # Minimum evidence coverage below which a report is rejected.
+    report_min_evidence_coverage: float = 0.9
+    # Optional OpenAI-compatible endpoint; when unset the offline stub is used.
+    llm_enabled: bool = False
+    llm_model: str = "gpt-4o-mini"
+    llm_base_url: str = "https://api.openai.com/v1"
+
+    # --- Evaluation (Phase 7, I1/I3/I6/I7/I10) --------------------------
+    # Fraction of scenarios used for training/weight-fitting.
+    eval_train_fraction: float = 0.6
+    eval_random_seed: int = 7
+
     def is_payment_fault_active(self) -> bool:
         return self.payment_fault_mode not in ("", "none")
 
