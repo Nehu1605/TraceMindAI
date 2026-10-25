@@ -1,4 +1,4 @@
-# TraceMind AI - Phase 1 & 2 runtime and test dependencies
+# TraceMind AI - Phase 1 runtime and test dependencies
 # Demo microservices
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
@@ -12,15 +12,19 @@ psycopg2-binary==2.9.9
 # Metrics
 prometheus-client==0.21.0
 
-# Graph (correlation / event-causality graph)
-networkx==3.3
-
 # Distributed tracing (OpenTelemetry)
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0
 opentelemetry-exporter-otlp==1.27.0
 opentelemetry-instrumentation-fastapi==0.48b0
 opentelemetry-instrumentation-httpx==0.48b0
+
+# Dashboard (Streamlit)
+streamlit==1.39.0
+streamlit-agraph==0.0.45
+plotly==5.24.1
+networkx==3.3
+pandas==2.2.2
 
 # Testing
 pytest==8.3.3
