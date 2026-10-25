@@ -22,3 +22,11 @@ data/otel-out/
 Thumbs.db
 .idea/
 .vscode/
+
+# Streamlit
+.streamlit/secrets.toml
+dashboard/.streamlit/secrets.toml
+
+# Dashboard cache
+dashboard/__pycache__/
+dashboard/pages/__pycache__/
